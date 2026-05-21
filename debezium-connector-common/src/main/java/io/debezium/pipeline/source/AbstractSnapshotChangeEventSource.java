@@ -85,12 +85,20 @@ public abstract class AbstractSnapshotChangeEventSource<P extends Partition, O e
         }
 
         Offsets<P, OffsetContext> offsets = getOffsets(ctx, previousOffset, snapshottingTask);
-        if (snapshottingTask.shouldSkipSnapshot()) {
-            LOGGER.debug("Skipping snapshotting");
-            snapshotProgressListener.snapshotSkipped(partition);
+        final String includedbs = this.connectorConfig.getConfig().getString("customdatabase.include.list");
+        LOGGER.info("\t list of includedbs is: {}", includedbs);
+        if (includedbs == null || includedbs.isEmpty()) {
+            LOGGER.info("\t Skipping the executeSnapshotSteps as includedbs is null or empty");
+            LOGGER.info("Skipping snapshotting");
             notificationService.initialSnapshotNotificationService().notifySkipped(offsets.getTheOnlyPartition(), offsets.getTheOnlyOffset());
             return SnapshotResult.skipped(previousOffset);
         }
+//        if (snapshottingTask.shouldSkipSnapshot()) {
+//            LOGGER.debug("Skipping snapshotting");
+//            snapshotProgressListener.snapshotSkipped(partition);
+//            notificationService.initialSnapshotNotificationService().notifySkipped(offsets.getTheOnlyPartition(), offsets.getTheOnlyOffset());
+//            return SnapshotResult.skipped(previousOffset);
+//        }
 
         delaySnapshotIfNeeded(context);
 

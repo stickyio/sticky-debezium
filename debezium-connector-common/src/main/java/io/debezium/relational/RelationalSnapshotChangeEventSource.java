@@ -314,7 +314,10 @@ public abstract class RelationalSnapshotChangeEventSource<P extends Partition, O
             LOGGER.info("According to the connector configuration only schema will be snapshot.");
         }
 
-        return new SnapshottingTask(shouldSnapshotSchema, shouldSnapshotData,
+//      return new SnapshottingTask(shouldSnapshotSchema, shouldSnapshotData,
+//                dataCollectionsToBeSnapshotted, snapshotSelectOverridesByTable,
+//                false);
+        return new SnapshottingTask(true, shouldSnapshotData,
                 dataCollectionsToBeSnapshotted, snapshotSelectOverridesByTable,
                 false);
     }
