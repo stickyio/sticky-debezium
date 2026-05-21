@@ -10,18 +10,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.OptionalLong;
-import java.util.Queue;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutorCompletionService;
@@ -30,6 +19,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.apache.kafka.connect.data.Struct;
@@ -120,15 +110,49 @@ public abstract class BinlogSnapshotChangeEventSource<P extends BinlogPartition,
     @Override
     protected Set<TableId> getAllTableIds(RelationalSnapshotContext<P, O> ctx) throws Exception {
 
-        Set<TableId> allTableIds = connection.getAllTableIds(ctx.catalogName);
-        // Log the databases that were readable and are included based on filters
-        final Set<String> includedDatabaseNames = allTableIds.stream()
-                .map(TableId::catalog)
-                .filter(filters.databaseFilter())
-                .collect(Collectors.toSet());
+        LOGGER.info("Read list of available tables in each database");
+        final Set<TableId> tableIds = new HashSet<>();
+        final Set<String> readableDatabaseNames = new HashSet<>();
+        final String includedbs = this.connectorConfig.getConfig().getString("customdatabase.include.list");
+        LOGGER.info("\t list of includedbs is: {}", includedbs);
+        final String[] databaseNamesFiltered = includedbs.split(",");
+        final Set<Pattern> patterns = this.connectorConfig.getDataCollectionsToBeSnapshotted().stream().map(Pattern::compile).collect(Collectors.toSet());
+        LOGGER.info("\t list of available pattern is: {}", patterns);
+        LOGGER.info("\t list of available databaseNamesFiltered is: {}", databaseNamesFiltered);
+        for (String dbName : databaseNamesFiltered) {
+            try {
+                // MySQL sometimes considers some local files as databases (see DBZ-164),
+                // so we will simply try each one and ignore the problematic ones ...
+                connection.query("SHOW FULL TABLES IN " + quote(dbName) + " where Table_Type = 'BASE TABLE'", rs -> {
+                    while (rs.next()) {
+                        TableId id = new TableId(dbName, null, rs.getString(1));
+                        tableIds.add(id);
+                    }
+                });
+                readableDatabaseNames.add(dbName);
+            }
+            catch (SQLException e) {
+                // We were unable to execute the query or process the results, so skip this ...
+                LOGGER.warn("\t skipping database '{}' due to error reading tables: {}", dbName, e.getMessage());
+            }
+        }
+        final Set<String> includedDatabaseNames = readableDatabaseNames.stream().filter(filters.databaseFilter()).collect(Collectors.toSet());
         LOGGER.info("\tsnapshot continuing with database(s): {}", includedDatabaseNames);
+        return tableIds;
 
-        return allTableIds;
+//        Set<TableId> allTableIds = connection.getAllTableIds(ctx.catalogName);
+//        // Log the databases that were readable and are included based on filters
+//        final Set<String> includedDatabaseNames = allTableIds.stream()
+//                .map(TableId::catalog)
+//                .filter(filters.databaseFilter())
+//                .collect(Collectors.toSet());
+//        LOGGER.info("\tsnapshot continuing with database(s): {}", includedDatabaseNames);
+//
+//        return allTableIds;
+    }
+
+    private String quote(String dbOrTableName) {
+        return "`" + dbOrTableName + "`";
     }
 
     @Override

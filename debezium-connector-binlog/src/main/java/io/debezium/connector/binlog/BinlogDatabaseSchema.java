@@ -6,11 +6,7 @@
 package io.debezium.connector.binlog;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
@@ -305,6 +301,18 @@ public abstract class BinlogDatabaseSchema<P extends BinlogPartition, O extends 
                                              Instant sourceTime, boolean snapshot) {
         final List<SchemaChangeEvent> schemaChangeEvents = new ArrayList<>(3);
         if (ignoredQueryStatements.contains(ddlStatements)) {
+            return schemaChangeEvents;
+        }
+
+        String ddlLowerCase = ddlStatements.toLowerCase(Locale.ROOT);
+        if (ddlLowerCase.contains("create or replace view") ||
+                ddlLowerCase.contains("create view") ||
+                ddlLowerCase.contains("alter view") ||
+                ddlLowerCase.contains("drop view") ||
+                ddlLowerCase.contains("create or replace algorithm") ||
+                ddlLowerCase.contains("algorithm=undefined"))
+        {
+            LOGGER.warn("Skipping DDL parsing for VIEW statement: '{}'", ddlStatements);
             return schemaChangeEvents;
         }
 
